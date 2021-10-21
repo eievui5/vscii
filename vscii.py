@@ -18,6 +18,7 @@ class FrameBuffer(object):
     # All ncurses access should be encapsulated through this class.
 
     elements: list = []
+    volatile: bool = False
     _window = None
     _buffer: list
 
@@ -93,6 +94,10 @@ class FrameBuffer(object):
         This function is automatically called by input functions such as
         `text_input` and `getch`.
         """
+
+        if self.volatile:
+            self.reset()
+        
         for i in self.elements:
             i._render(self)
 
@@ -213,7 +218,21 @@ class TextDisplay(FBElement):
         parent.blit(add_border(create_rect(self.back, self.width - 2, self.height - 2),
             self.border, self.back), self.anch_x, self.anch_y)
 
-        parent.blit(self.buffer, self.anch_x + 1, self.anch_y + 1)
+        y_off = 0
+        for i in self.buffer.splitlines():
+            x_off = 0
+            for i in i.split():
+                if x_off + len(i) > self.width - 2 - self.margin:
+                    y_off += 1
+                    x_off = 0
+                parent.blit(i, self.anch_x + 1 + x_off, self.anch_y + 1 + y_off)
+                x_off += len(i) + 1
+            y_off += 1
+
+    def clear(self):
+        """ Clear the text buffer.
+        """
+        self.buffer = ""
 
     def print(self, string: str):
         """ Push a new line of text to the text field.\n
@@ -227,38 +246,36 @@ class SelectList(FBElement):
     selected: str
     _curpos: int = 0
 
-    def __init__(self, anch_x: int, anch_y: int, entries: int,
-            selected: str = "#", background: str = " "):
-        self.anch_x = anch_x
-        self.anch_y = anch_y
-        self.background = background
-        self.entries = entries
-        self.selected = selected
-
     def _render(self, parent: FrameBuffer):
         parent.blit(create_rect(self.background, 1, self.entries), self.anch_x,
             self.anch_y)
         parent.blit(self.selected, self.anch_x, self.anch_y + self._curpos)
 
     @staticmethod
-    def input(parent: FrameBuffer, selection) -> int:
-        parent.add_elem(selection)
+    def input(parent: FrameBuffer, anch_x: int, anch_y: int,
+            entries: int, selected: str = "#", background: str = " ") -> int:
+        self = SelectList()
+        self.anch_x = anch_x
+        self.anch_y = anch_y
+        self.background = background
+        self.entries = entries
+        self.selected = selected
+        parent.add_elem(self)
 
         while (1):
-            parent.render()
-
             inchar: int = parent.getch()
 
             if inchar == curses.KEY_UP:
-                selection.movecur(-1)
+                self.movecur(-1)
             elif inchar == curses.KEY_DOWN:
-                selection.movecur(1)
+                self.movecur(1)
 
             if inchar == curses.KEY_ENTER or inchar == ord('\n'):
                 break
-        
-        result: int = selection._curpos
-        parent.remove_elem(selection)
+        result: int = self._curpos
+        parent.blit(create_rect(self.background, 1, self.entries), self.anch_x,
+            self.anch_y)
+        parent.remove_elem(self)
         return result
 
     def movecur(self, pos: int):
