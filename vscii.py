@@ -59,11 +59,10 @@ class FrameBuffer(object):
                 x += 1
             i += 1
 
-    def del_elem(self, elem):
+    def remove_elem(self, elem):
         """ Delete an element.\n
         """
         self.elements.remove(elem)
-        del(elem)
 
     def getch(self) -> int:
         """ Get a single keyboard input.\n
@@ -77,7 +76,7 @@ class FrameBuffer(object):
     def get_height(self) -> int:
         return self._window.getmaxyx()[0]
 
-    def text_input(self, row: int, column: int, max_length: int = 80):
+    def input(self, column: int, row: int, max_length: int = 80):
         """ Allow the user to input a line of text.\n
         The text will be returned when the user presses the enter key. This text
         input can appear anywhere on the screen. An optional max length can be
@@ -116,10 +115,22 @@ class FrameBuffer(object):
 class FBElement(object):
     """ Base class for Frame Buffer Elements.\n
     """
-    anch_x: int
-    anch_y: int
-    width: int
-    height: int
+    anch_x: int = 0
+    anch_y: int = 0
+    width: int = 0
+    height: int = 0
+
+    def get_top(self) -> int:
+        return self.anch_y
+    
+    def get_bottom(self) -> int:
+        return self.anch_y + self.height
+    
+    def get_left(self) -> int:
+        return self.anch_x
+    
+    def get_right(self) -> int:
+        return self.anch_x + self.width
 
     def _render(self, parent: FrameBuffer):
         return
@@ -135,9 +146,8 @@ class FBContainer(FBElement):
     def add_child(self, child: FBElement):
         self.children.append(child)
     
-    def del_child(self, child: FBElement):
+    def remove_child(self, child: FBElement):
         self.children.remove(child)
-        del(child)
 
     def _render(self, parent: FrameBuffer):
         for child in self.children:
@@ -148,31 +158,38 @@ class FullScreen(FBContainer):
         for child in self.children:
             child.anch_x = 0
             child.anch_y = 0
-            child.width = parent.get_width() - 2
-            child.height = parent.get_height() - 3
+            child.width = parent.get_width()
+            child.height = parent.get_height() - 1
             child._render(parent)
 
-class HorizontalList(FBContainer):
+class VSplit(FBContainer):
     def _render(self, parent):
         for i in range(len(self.children)):
             if self.children[i] == self:
                 continue
-            self.children[i].anch_x = self.width // len(self.children) * i
+            self.children[i].anch_x = self.anch_x + self.width // len(self.children) * i
             self.children[i].anch_y = self.anch_y
             self.children[i].width = self.width // len(self.children)
             self.children[i].height = self.height
             self.children[i]._render(parent)
 
-class VeriticalList(FBContainer):
+class HSplit(FBContainer):
     def _render(self, parent):
         for i in range(len(self.children)):
             if self.children[i] == self:
                 continue
             self.children[i].anch_x = self.anch_x
-            self.children[i].anch_y = self.height // len(self.children) * i
+            self.children[i].anch_y = self.anch_y + self.height // len(self.children) * i
             self.children[i].width = self.width
             self.children[i].height = self.height // len(self.children)
             self.children[i]._render(parent)
+
+class Center(FBContainer):
+    def _render(self, parent):
+        for child in self.children:
+            child.anch_x = (self.width - child.width) // 2
+            child.anch_y = (self.height - child.height) // 2
+            child._render(parent)
 
 class TextDisplay(FBElement):
     """ Maintain a list of text entries.\n
@@ -187,18 +204,13 @@ class TextDisplay(FBElement):
     fix_y: int
     margin: int
 
-    def __init__(self, anch_x: int, anch_y: int, width: int, height: int,
-            border: str = "#", back: str = " ", margin: int = 1, ):
-        self.anch_x = anch_x
-        self.anch_y = anch_y
+    def __init__(self, border: str = "#", back: str = " ", margin: int = 1):
         self.back = back
         self.border = border
         self.margin = margin
-        self.height = height
-        self.width = width
 
     def _render(self, parent: FrameBuffer):
-        parent.blit(add_border(create_rect(self.back, self.width, self.height),
+        parent.blit(add_border(create_rect(self.back, self.width - 2, self.height - 2),
             self.border, self.back), self.anch_x, self.anch_y)
 
         parent.blit(self.buffer, self.anch_x + 1, self.anch_y + 1)
@@ -207,10 +219,6 @@ class TextDisplay(FBElement):
         """ Push a new line of text to the text field.\n
         """
         for i in string.splitlines():
-            if len(i) < self.width - self.margin * 2:
-                i += self.back * (self.width - self.margin * 2 - len(i))
-            else:
-                i = i[0:self.width - self.margin * 2]
             self.buffer += self.back * self.margin + i + self.back * self.margin + "\n"
 
 class SelectList(FBElement):
@@ -250,7 +258,7 @@ class SelectList(FBElement):
                 break
         
         result: int = selection._curpos
-        parent.del_elem(selection)
+        parent.remove_elem(selection)
         return result
 
     def movecur(self, pos: int):
@@ -282,3 +290,22 @@ def create_rect(string: str, width: int, height: int) -> str:
     """ Creates a rectangle which can be displayed to the frame buffer.\n
     """
     return string * width + ("\n" + string * width) * (height - 1)
+
+def read_tree(tree: dict) -> dict:
+    """ Builds a tree structure using an input dict.\n
+    This recursively scans through its input to build a tree which matches its
+    visual input. Returns a dictionary of each element's name, pointing to each
+    element's class.
+    """
+    result: dict = dict()
+
+    for i in tree:
+        if type(tree[i]) is tuple:
+            result[i] = tree[i][0]
+            subtree: dict = read_tree(tree[i][1])
+            result.update(subtree)
+            for j in tree[i][1]:
+                result[i].add_child(subtree[j])
+        else:
+            result[i] = tree[i]
+    return result
