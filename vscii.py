@@ -4,13 +4,14 @@ user to expand upon the library with their own elements and containers.
 """
 
 import curses
+from typing import Type
 
 class FrameBuffer(object):
     """ Central framebuffer object.\n
     This handles stdin and stdout for the user, maintaining a text-based frame
     buffer of a given width and height. It supports primative drawing functions
     such as `blit()`.\n
-    Elements can be added to the framebuffer using `add_elem()`. Elements can 
+    Elements can be added to the framebuffer using `add_elem()`. Elements can
     contain a `render()` function which will be excuted each time the frame
     buffer is rendered. This can be used for things such as text boxes or
     graphical windows.
@@ -39,7 +40,7 @@ class FrameBuffer(object):
         each render.
         """
         self.elements.append(elem)
-    
+
     def blit(self, blit: str, xpos: int, ypos: int, transparent: str = ""):
         """ Place a rectangular graphic onto the framebuffer, overwriting anything
         under it.\n
@@ -73,7 +74,7 @@ class FrameBuffer(object):
 
     def get_width(self) -> int:
         return self._window.getmaxyx()[1]
-    
+
     def get_height(self) -> int:
         return self._window.getmaxyx()[0]
 
@@ -97,7 +98,7 @@ class FrameBuffer(object):
 
         if self.volatile:
             self.reset()
-        
+
         for i in self.elements:
             i._render(self)
 
@@ -107,10 +108,10 @@ class FrameBuffer(object):
 
             for char in self._buffer[i * self.get_width():(i + 1) * self.get_width()]:
                 result += char
-            
+
             self._window.addstr(i, 0, result)
         self._window.refresh()
-    
+
     def reset(self):
         """ Reset the drawing area.\n
         Recreates the framebuffer, adjusting to fit the terminal's current size.
@@ -127,13 +128,13 @@ class FBElement(object):
 
     def get_top(self) -> int:
         return self.anch_y
-    
+
     def get_bottom(self) -> int:
         return self.anch_y + self.height
-    
+
     def get_left(self) -> int:
         return self.anch_x
-    
+
     def get_right(self) -> int:
         return self.anch_x + self.width
 
@@ -150,7 +151,7 @@ class FBContainer(FBElement):
 
     def add_child(self, child: FBElement):
         self.children.append(child)
-    
+
     def remove_child(self, child: FBElement):
         self.children.remove(child)
 
@@ -237,8 +238,7 @@ class TextDisplay(FBElement):
     def print(self, string: str):
         """ Push a new line of text to the text field.\n
         """
-        for i in string.splitlines():
-            self.buffer += self.back * self.margin + i + self.back * self.margin + "\n"
+        self.buffer += string
 
 class SelectList(FBElement):
     background: str
@@ -289,7 +289,7 @@ def add_border(string: str, border: str = " ", background: str = " ") -> str:
     This is a convienience function to draw a rectangular area around a string.
     """
     line_len = 0
-    
+
     for i in string.split("\n"):
         if len(i) > line_len:
             line_len = len(i)
@@ -318,11 +318,17 @@ def read_tree(tree: dict) -> dict:
 
     for i in tree:
         if type(tree[i]) is tuple:
+            if not isinstance(tree[i][0], FBElement):
+                raise TypeError("The first member of a tuple must be a class instance.")
             result[i] = tree[i][0]
+            if not isinstance(tree[i][1], dict):
+                raise TypeError("Expected a dict after class in tuple.")
             subtree: dict = read_tree(tree[i][1])
             result.update(subtree)
             for j in tree[i][1]:
                 result[i].add_child(subtree[j])
-        else:
+        elif isinstance(tree[i], FBElement):
             result[i] = tree[i]
+        else:
+            raise TypeError(f"Unexpected {tree[i]} in element tree.")
     return result
