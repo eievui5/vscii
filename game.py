@@ -1,3 +1,4 @@
+
 import re
 import vscii
 
@@ -24,17 +25,17 @@ class Item(object):
         self.name = name
 
     def use(self):
-        nodes["player_console"].print(f"{self.name} cannot be used right now.")
+        nodes["player_console"].print(f"{self.name} cannot be used right now.\n")
 
 class Weapon(Item):
     def use(self):
         global enemy
 
         if not enemy is None:
-            nodes["player_console"].print(f"You strike the {enemy.name} with your {self.name}.")
+            nodes["player_console"].print(f"You strike the {enemy.name} with your {self.name}.\n")
             enemy = None
         else:
-            nodes["player_console"].print(f"You swing the {self.name} in the air.")
+            nodes["player_console"].print(f"You swing the {self.name} in the air.\n")
 
 class Heal(Item):
     magnitude: int
@@ -48,7 +49,7 @@ class Heal(Item):
 
         value = self.magnitude if player.health + self.magnitude < player.max_health else player.max_health - player.health
         player.health += value
-        nodes["player_console"].print(f"You consumed the {self.name} and healed {value} points of health.")
+        nodes["player_console"].print(f"You consumed the {self.name} and healed {value} points of health.\n")
         nodes["inventory"].items.remove(self)
 
 class InventoryMenu(vscii.FBElement):
@@ -71,7 +72,7 @@ class InventoryMenu(vscii.FBElement):
         # List inventory items.
         for i in range(len(self.items)):
             parent.blit(self.items[i].name, self.anch_x + 4, self.anch_y + 2 + i)
-    
+
     def get_item(self, item: str) -> Item:
         for i in self.items:
             if i.name.casefold() == item.casefold():
@@ -89,7 +90,7 @@ class PlayerMenu(vscii.FBElement):
 
         # Draw player name
         parent.blit(player.name, self.anch_x + (self.width - len(player.name)) // 2, self.anch_y + 1)
-        
+
         # Draw player info.
         parent.blit(f"Health: {player.health} / {player.max_health}",
             self.anch_x + 4, self.anch_y + 3)
@@ -98,6 +99,28 @@ class Environment(vscii.FBElement):
     def _render(self, parent: vscii.FrameBuffer):
         parent.blit(vscii.create_rect("#", self.width, self.height - 1), self.anch_x, self.anch_y)
         parent.blit(vscii.create_rect("_", self.width, 1), self.anch_x, self.anch_y + self.height - 1)
+
+class PlayerConsole(vscii.TextDisplay):
+    def _render(self, parent: vscii.FrameBuffer):
+        result: str = ""
+        for i in self.buffer.splitlines():
+            x_off = 0
+            for i in i.split():
+                if x_off + len(i) > self.width - 2 - self.margin:
+                    result += "\n"
+                    x_off = 0
+                result += i + " "
+                x_off += len(i) + 1
+            result += "\n"
+        self.buffer = result
+        while len(self.buffer.splitlines()) >= self.height - 2:
+            self.buffer = self.buffer[self.buffer.find("\n") + 1:]
+
+        parent.blit(result, self.anch_x, self.anch_y)
+
+    def input(self, parent: vscii.FrameBuffer) -> str:
+        return parent.input(self.get_left(), self.get_bottom() - 1, self.width)
+
 
 def select_item() -> Item:
     return nodes["inventory"].items[vscii.SelectList.input(framebuffer,
@@ -122,7 +145,7 @@ def game():
             "vsplit" : (vscii.VSplit(), {
                 "lefthsplit" : (vscii.HSplit(), {
                     "environment" : Environment(),
-                    "player_console" : vscii.TextDisplay(),
+                    "player_console" : PlayerConsole(),
                 }),
                 "righthsplit" : (vscii.HSplit(), {
                     "inventory" : InventoryMenu(),
@@ -139,19 +162,18 @@ def game():
     framebuffer.render()
 
     nodes["player_console"].print("What is your name?")
-    player.name = framebuffer.input(
-        nodes["player_console"].get_left() + 2,
-        nodes["player_console"].get_bottom() - 2)
+    player.name = nodes["player_console"].input(framebuffer)
     nodes["player_console"].clear()
 
     # Process player commands.
     enemy = Entity("Test")
-    nodes["player_console"].print(f"A {enemy.name} appeared!")
+    nodes["player_console"].print(f"A {enemy.name} appeared!\n")
     while True:
-        command: list = framebuffer.input(
-            nodes["player_console"].get_left() + 2,
-            nodes["player_console"].get_bottom() - 2).strip().split()
-        
+        command: list = nodes["player_console"].input(framebuffer).strip().split()
+
+        if not command:
+            continue
+
         if command[0] == "exit":
             break
         elif command[0] == "use":
@@ -162,16 +184,16 @@ def game():
                 item = nodes["inventory"].get_item(command[1])
             else:
                 item = select_item()
-            
+
             if not item is None:
                 item.use()
             else:
                 # Decide between "a" and "an" using a regex.
-                nodes["player_console"].print(f"You don't have a"
+                nodes["player_console"].print(f"You don't have any"
                     + ("n" if re.match(r"^[aeiou]", command[1]) else "")
                     + f" \"{command[1]}\" right now.")
         else:
-            nodes["player_console"].print(f"Unknown command: \"{command}\"")
+            nodes["player_console"].print(f"Unknown command: \"{command}\"\n")
 
 def __main__():
     game()
