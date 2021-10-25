@@ -4,7 +4,6 @@ user to expand upon the library with their own elements and containers.
 """
 
 import curses
-from typing import Type
 
 class FrameBuffer(object):
     """ Central framebuffer object.\n
@@ -67,15 +66,19 @@ class FrameBuffer(object):
         self.elements.remove(elem)
 
     def getch(self) -> int:
-        """ Get a single keyboard input.\n
+        """ Return a single keyboard input.\n
         """
         self.render()
         return self._window.getch()
 
     def get_width(self) -> int:
+        """ Return the width of the terminal.
+        """
         return self._window.getmaxyx()[1]
 
     def get_height(self) -> int:
+        """ Return the width of the terminal.
+        """
         return self._window.getmaxyx()[0]
 
     def input(self, column: int, row: int, max_length: int = 80):
@@ -160,6 +163,8 @@ class FBContainer(FBElement):
             child._render(parent)
 
 class FullScreen(FBContainer):
+    """ Resize all child elements to match the size of the parent FrameBuffer.
+    """
     def _render(self, parent: FrameBuffer):
         for child in self.children:
             child.anch_x = 0
@@ -169,6 +174,8 @@ class FullScreen(FBContainer):
             child._render(parent)
 
 class VSplit(FBContainer):
+    """ Evenly split children vertically.
+    """
     def _render(self, parent):
         for i in range(len(self.children)):
             if self.children[i] == self:
@@ -180,6 +187,8 @@ class VSplit(FBContainer):
             self.children[i]._render(parent)
 
 class HSplit(FBContainer):
+    """ Evenly split children horizontally.
+    """
     def _render(self, parent):
         for i in range(len(self.children)):
             if self.children[i] == self:
@@ -191,6 +200,8 @@ class HSplit(FBContainer):
             self.children[i]._render(parent)
 
 class Center(FBContainer):
+    """ Center children without modifying their width.
+    """
     def _render(self, parent):
         for child in self.children:
             child.anch_x = (self.width - child.width) // 2
@@ -236,11 +247,13 @@ class TextDisplay(FBElement):
         self.buffer = ""
 
     def print(self, string: str):
-        """ Push a new line of text to the text field.\n
+        """ Push a new line of text to the text field.
         """
         self.buffer += string
 
 class SelectList(FBElement):
+    """ Handle drawing a list of selectable options.
+    """
     background: str
     entries: int
     selected: str
@@ -254,6 +267,8 @@ class SelectList(FBElement):
     @staticmethod
     def input(parent: FrameBuffer, anch_x: int, anch_y: int,
             entries: int, selected: str = "#", background: str = " ") -> int:
+        """ Wait for the player to make a selection, returning the result.
+        """
         self = SelectList()
         self.anch_x = anch_x
         self.anch_y = anch_y
