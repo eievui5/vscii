@@ -18,6 +18,7 @@ which block the main thread, such as `input_line()` or `getch()`, will call
 2. [Elements](#elements)
 3. [Trees](#trees)
 4. [Splits](#splits)
+5. [Custom Elements](#custom-elements)
 
 ## Hello World!
 
@@ -158,3 +159,85 @@ framebuffer.getch()
 
 Now the screen is evenly split between each TextDisplay object. Splits can be
 nested to make even more advance designs.
+
+## Custom Elements
+
+Oftentimes you'll want custom elements that provide greater control than VSCII's
+included elements. Writing your own is easy, and completely compatable with
+other containers and elements.
+
+To start, create a new class that inherits from `vscii.FBElement`.
+
+```
+class GroceryList(vscii.FBElement):
+    pass
+```
+
+`FBElement` includes a few variables which containers can rely on for managing
+elements, as well as a `_render()` function which `FrameBuffer` calls upon each
+redraw.
+
+```
+class FBElement(object):
+    """ Base class for Frame Buffer Elements.\n
+    """
+    anch_x = 0
+    anch_y = 0
+    width = 0
+    height = 0
+
+    def _render(self, parent: FrameBuffer):
+        return
+```
+
+Let's add to our grocery list to allow the user to modify it:
+
+```
+class GroceryList(vscii.FBElement):
+    groceries = ""
+
+    def add_grocery(self, grocery):
+        self.groceries += grocery + "\n"
+```
+
+And now we'll write a little `_render` function to center the text on the
+grocery list element. The frame buffer passes itself to the render function as
+the `parent` argument, which we can use to draw our element.
+
+```
+def _render(self, parent):
+    y = 0
+    for line in self.groceries.splitlines():
+        # Center the text and draw it on a new row.
+        parent.blit(line, self.anch_x + (self.width - len(line)) // 2, y)
+        y += 1
+```
+
+Now just add `GroceryList` to a tree and write some groceries to it!
+
+```
+framebuffer = vscii.FrameBuffer()
+fullscreen = vscii.FullScreen()
+grocery_list = GroceryList()
+
+framebuffer.add_elem(fullscreen)
+fullscreen.add_child(grocery_list)
+
+grocery_list.add_grocery("Apples")
+grocery_list.add_grocery("Milk")
+grocery_list.add_grocery("Soap")
+grocery_list.add_grocery("Coffee Beans")
+
+# Press any key to end...
+framebuffer.getch()
+```
+
+You should see each string in a sequential list, centered according to the
+list's width.
+
+```
+       Apples
+        Milk
+        Soap
+    Coffee Beans
+```
